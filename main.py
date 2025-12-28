@@ -16,6 +16,14 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Scraper API")
 
 
+@app.get("/")
+async def root() -> dict[str, object]:
+    return {
+        "status": "ok",
+        "endpoints": ["/health", "/list", "/scrape", "/crawl"],
+    }
+
+
 class ScrapeRequest(BaseModel):
     url: HttpUrl
 
