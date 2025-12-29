@@ -127,6 +127,26 @@ def _find_duration_like_text(text: str) -> Optional[str]:
 
 
 def parse_page(html: str, url: str) -> dict[str, Any]:
+    match = re.search(r"xv\.conf\.data\.page\s*=\s*({.*?});", html)
+    if match:
+        try:
+            data = json.loads(match.group(1))
+            if data.get("videos") and isinstance(data["videos"], list):
+                video_data = data["videos"][0]
+                return {
+                    "url": url,
+                    "title": video_data.get("t"),
+                    "description": video_data.get("d"),
+                    "thumbnail_url": video_data.get("i"),
+                    "duration": _normalize_duration(video_data.get("d")),
+                    "views": str(video_data.get("v")) if video_data.get("v") is not None else None,
+                    "uploader_name": video_data.get("p"),
+                    "category": None,
+                    "tags": [tag["t"] for tag in video_data.get("tags", [])],
+                }
+        except json.JSONDecodeError:
+            pass
+
     soup = BeautifulSoup(html, "lxml")
 
     og_title = _meta(soup, prop="og:title")
@@ -216,7 +236,6 @@ async def scrape(url: str) -> dict[str, Any]:
 async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dict[str, Any]]:
     root = base_url if base_url.endswith("/") else base_url + "/"
 
-    # XNXX commonly uses ?p=0-based page index on some listings.
     candidates: list[str] = []
     if page <= 1:
         candidates.append(root)
@@ -247,71 +266,29 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
             raise last_exc
         return []
 
-    soup = BeautifulSoup(html, "lxml")
-    base_uri = httpx.URL(used)
+    match = re.search(r"xv\.conf\.data\.page\.videos\s*=\s*({.*?});", html)
+    if not match:
+        return []
 
-    items: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    try:
+        data = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return []
 
-    for a in soup.select('a[href*="/video"]'):
-        href = a.get("href")
-        if not href:
-            continue
-        if "/video" not in href:
-            continue
-
-        try:
-            abs_url = str(base_uri.join(href))
-        except Exception:
-            continue
-        if abs_url in seen:
-            continue
-
-        img = a.find("img")
-        thumb = _best_image_url(img)
-        if not thumb:
-            continue
-
-        title = _first_non_empty(img.get("alt") if img else None, a.get("title"), _text(a))
-        duration = _find_duration_like_text(a.get_text(" ", strip=True))
-
-        container = a
-        for tag in ("article", "li", "div"):
-            p = a.find_parent(tag)
-            if p is not None:
-                container = p
-                break
-
-        uploader_name = None
-        for ua in container.select('a[href*="/pornstar/"], a[href*="/profiles/"], a[href*="/model/"]'):
-            t = _text(ua)
-            if t:
-                uploader_name = t
-                break
-
-        views = None
-        m = re.search(r"(\d+(?:\.\d+)?|\d[\d,\.]*)\s*([KMB])?\s*(?:views|view)\b", container.get_text(" ", strip=True), re.IGNORECASE)
-        if m:
-            num = m.group(1).replace(" ", "").replace(",", "")
-            suf = (m.group(2) or "").upper()
-            views = f"{num}{suf}" if suf else num
-
-        seen.add(abs_url)
+    items = []
+    for video_data in data.get("videos", [])[:limit]:
         items.append(
             {
-                "url": abs_url,
-                "title": title,
-                "thumbnail_url": thumb,
-                "duration": duration,
-                "views": views,
-                "uploader_name": uploader_name,
+                "url": video_data.get("u"),
+                "title": video_data.get("t"),
+                "thumbnail_url": video_data.get("i"),
+                "duration": _normalize_duration(video_data.get("d")),
+                "views": str(video_data.get("v")) if video_data.get("v") is not None else None,
+                "uploader_name": video_data.get("p"),
                 "category": None,
                 "tags": [],
             }
         )
-
-        if limit and len(items) >= limit:
-            break
 
     return items
 
