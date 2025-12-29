@@ -155,10 +155,10 @@ def _extract_views(video_obj: Optional[dict[str, Any]], html: str, soup: Beautif
                     return str(v).strip()
 
     for pattern in (
-        r'"userInteractionCount"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?',
-        r'"interactionCount"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?',
-        r'"viewCount"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?',
-        r'"views"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?',
+        r'"userInteractionCount"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?'
+        r'"interactionCount"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?'
+        r'"viewCount"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?'
+        r'"views"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?'
     ):
         m = re.search(pattern, html, re.IGNORECASE)
         if m:
@@ -182,13 +182,12 @@ def _extract_views(video_obj: Optional[dict[str, Any]], html: str, soup: Beautif
 
     return None
 
-
 def parse_page(html: str, url: str) -> dict[str, Any]:
     soup = BeautifulSoup(html, "lxml")
 
     initials_script = soup.find("script", id="initials-script")
     if initials_script:
-        match = re.search(r"window.initials\s*=\s*({.*});", str(initials_script))
+        match = re.search(r"window\.initials\s*=\s*({.*});", str(initials_script))
         if match:
             try:
                 data = json.loads(match.group(1))
@@ -298,7 +297,6 @@ def parse_page(html: str, url: str) -> dict[str, Any]:
         "category": category,
         "tags": tags,
     }
-
 
 async def scrape(url: str) -> dict[str, Any]:
     html = await fetch_html(url)
