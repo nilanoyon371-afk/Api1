@@ -342,6 +342,29 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
         return []
 
     soup = BeautifulSoup(html, "lxml")
+    initials_script = soup.find("script", id="initials-script")
+    if initials_script:
+        match = re.search(r"window\.initials\s*=\s*({.*});", str(initials_script))
+        if match:
+            try:
+                data = json.loads(match.group(1))
+                videos = data.get("page", {}).get("videoListProps", {}).get("videoThumbProps", [])
+                items = []
+                for video_data in videos:
+                    items.append({
+                        "url": video_data.get("pageURL"),
+                        "title": video_data.get("title"),
+                        "thumbnail_url": video_data.get("thumbURL"),
+                        "duration": _normalize_duration(video_data.get("duration")),
+                        "views": str(video_data.get("views")) if video_data.get("views") is not None else None,
+                        "uploader_name": video_data.get("landing", {}).get("name"),
+                        "category": None,
+                        "tags": [],
+                    })
+                return items[:limit] if limit else items
+            except json.JSONDecodeError:
+                pass
+
     base_uri = httpx.URL(used)
 
     items: list[dict[str, Any]] = []
@@ -366,13 +389,12 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
         img = a.find("img")
         thumb = _best_image_url(img)
 
-        # Try to find a specific title element first
         title_el = a.find(class_=re.compile(r"video-thumb-info__name"))
         title = _first_non_empty(
             _text(title_el),
             img.get("alt") if img else None,
             a.get("title"),
-            _text(a),  # Fallback to the original broad search
+            _text(a),
         )
 
         duration = _find_duration_like_text(a)
@@ -402,7 +424,6 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
             suf = (m.group(2) or "").upper()
             views = f"{num}{suf}" if suf else num
 
-        # If no thumbnail, skip (usually not a card)
         if not thumb:
             continue
 
@@ -445,7 +466,6 @@ async def crawl_videos(
     results: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    # If per_page_limit==0, we try to return "all cards on the page" by using no limit.
     for page in range(start_page, start_page + max_pages):
         page_items = await list_videos(
             base_url=base_url,
