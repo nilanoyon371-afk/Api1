@@ -186,6 +186,28 @@ def _extract_views(video_obj: Optional[dict[str, Any]], html: str, soup: Beautif
 def parse_page(html: str, url: str) -> dict[str, Any]:
     soup = BeautifulSoup(html, "lxml")
 
+    initials_script = soup.find("script", id="initials-script")
+    if initials_script:
+        match = re.search(r"window.initials\s*=\s*({.*});", str(initials_script))
+        if match:
+            try:
+                data = json.loads(match.group(1))
+                video_data = data.get("videoPage", {}).get("video", {})
+                if video_data:
+                    return {
+                        "url": url,
+                        "title": video_data.get("name"),
+                        "description": video_data.get("description"),
+                        "thumbnail_url": video_data.get("thumbURL"),
+                        "duration": _normalize_duration(video_data.get("duration")),
+                        "views": str(video_data.get("views")) if video_data.get("views") is not None else None,
+                        "uploader_name": video_data.get("author", {}).get("name"),
+                        "category": video_data.get("categories")[0] if video_data.get("categories") else None,
+                        "tags": video_data.get("tags", []),
+                    }
+            except json.JSONDecodeError:
+                pass
+
     og_title = _meta(soup, prop="og:title")
     og_desc = _meta(soup, prop="og:description")
     og_image = _meta(soup, prop="og:image")
