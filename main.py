@@ -12,21 +12,35 @@ import xvideos
 app = FastAPI(title="Scraper API")
 
 
+SCRAPERS = {
+    "xhamster.com": xhamster,
+    "masa49.org": masa49,
+    "xnxx.com": xnxx,
+    "xvideos.com": xvideos,
+}
+
+
+def get_scraper_module(host: str):
+    for domain, module in SCRAPERS.items():
+        if host.endswith(domain):
+            return module
+    return None
+
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the Scraper API"}
+
 class ScrapeRequest(BaseModel):
     url: HttpUrl
 
     @field_validator("url")
     @classmethod
     def validate_domain(cls, v: HttpUrl) -> HttpUrl:
-        host = (v.host or "").lower()
-        if (
-            host.endswith("xhamster.com")
-            or host.endswith("masa49.org")
-            or host.endswith("xnxx.com")
-            or host.endswith("xvideos.com")
-        ):
+        if get_scraper_module(v.host or ""):
             return v
-        raise ValueError("Only xhamster.com, masa49.org, xnxx.com and xvideos.com URLs are allowed")
+        raise ValueError(
+            "Only xhamster.com, masa49.org, xnxx.com and xvideos.com URLs are allowed"
+        )
 
 
 class ScrapeResponse(BaseModel):
@@ -58,37 +72,27 @@ class ListRequest(BaseModel):
     @field_validator("base_url")
     @classmethod
     def validate_domain(cls, v: HttpUrl) -> HttpUrl:
-        host = (v.host or "").lower()
-        if (
-            host.endswith("xhamster.com")
-            or host.endswith("masa49.org")
-            or host.endswith("xnxx.com")
-            or host.endswith("xvideos.com")
-        ):
+        if get_scraper_module(v.host or ""):
             return v
-        raise ValueError("Only xhamster.com, masa49.org, xnxx.com and xvideos.com base_url are allowed")
+        raise ValueError(
+            "Only xhamster.com, masa49.org, xnxx.com and xvideos.com base_url are allowed"
+        )
+
+
 async def _scrape_dispatch(url: str, host: str) -> dict[str, object]:
-    if xhamster.can_handle(host):
-        return await xhamster.scrape(url)
-    if masa49.can_handle(host):
-        return await masa49.scrape(url)
-    if xnxx.can_handle(host):
-        return await xnxx.scrape(url)
-    if xvideos.can_handle(host):
-        return await xvideos.scrape(url)
-    raise HTTPException(status_code=400, detail="Unsupported host")
+    module = get_scraper_module(host)
+    if module and hasattr(module, "scrape"):
+        return await module.scrape(url)
+    raise HTTPException(status_code=400, detail="Unsupported host or action")
 
 
-async def _list_dispatch(base_url: str, host: str, page: int, limit: int) -> list[dict[str, object]]:
-    if xhamster.can_handle(host):
-        return await xhamster.list_videos(base_url=base_url, page=page, limit=limit)
-    if masa49.can_handle(host):
-        return await masa49.list_videos(base_url=base_url, page=page, limit=limit)
-    if xnxx.can_handle(host):
-        return await xnxx.list_videos(base_url=base_url, page=page, limit=limit)
-    if xvideos.can_handle(host):
-        return await xvideos.list_videos(base_url=base_url, page=page, limit=limit)
-    raise HTTPException(status_code=400, detail="Unsupported host")
+async def _list_dispatch(
+    base_url: str, host: str, page: int, limit: int
+) -> list[dict[str, object]]:
+    module = get_scraper_module(host)
+    if module and hasattr(module, "list_videos"):
+        return await module.list_videos(base_url=base_url, page=page, limit=limit)
+    raise HTTPException(status_code=400, detail="Unsupported host or action")
 
 
 async def _crawl_dispatch(
@@ -99,15 +103,16 @@ async def _crawl_dispatch(
     per_page_limit: int,
     max_items: int,
 ) -> list[dict[str, object]]:
-    if xhamster.can_handle(host):
-        return await xhamster.crawl_videos(
+    module = get_scraper_module(host)
+    if module and hasattr(module, "crawl_videos"):
+        return await module.crawl_videos(
             base_url=base_url,
             start_page=start_page,
             max_pages=max_pages,
             per_page_limit=per_page_limit,
             max_items=max_items,
         )
-    raise HTTPException(status_code=400, detail="Unsupported host")
+    raise HTTPException(status_code=400, detail="Unsupported host or action")
 
 
 @app.get("/health")
@@ -121,7 +126,9 @@ async def scrape(url: str) -> ScrapeResponse:
     try:
         data = await _scrape_dispatch(str(req.url), req.url.host or "")
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail="Upstream returned error") from e
+        raise HTTPException(
+            status_code=e.response.status_code, detail="Upstream returned error"
+        ) from e
     except Exception as e:
         raise HTTPException(status_code=502, detail="Failed to fetch url") from e
     return ScrapeResponse(**data)
@@ -138,9 +145,13 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[Lis
         limit = 60
 
     try:
-        items = await _list_dispatch(str(req.base_url), req.base_url.host or "", page, limit)
+        items = await _list_dispatch(
+            str(req.base_url), req.base_url.host or "", page, limit
+        )
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail="Upstream returned error") from e
+        raise HTTPException(
+            status_code=e.response.status_code, detail="Upstream returned error"
+        ) from e
     except Exception as e:
         raise HTTPException(status_code=502, detail="Failed to fetch url") from e
 
@@ -182,7 +193,9 @@ async def crawl_videos(
             max_items,
         )
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail="Upstream returned error") from e
+        raise HTTPException(
+            status_code=e.response.status_code, detail="Upstream returned error"
+        ) from e
     except Exception as e:
         raise HTTPException(status_code=502, detail="Failed to fetch url") from e
 
@@ -194,7 +207,9 @@ async def scrape_post(body: ScrapeRequest) -> ScrapeResponse:
     try:
         data = await _scrape_dispatch(str(body.url), body.url.host or "")
     except httpx.HTTPStatusError as e:
-        raise HTTPException(status_code=e.response.status_code, detail="Upstream returned error") from e
+        raise HTTPException(
+            status_code=e.response.status_code, detail="Upstream returned error"
+        ) from e
     except Exception as e:
         raise HTTPException(status_code=502, detail="Failed to fetch url") from e
     return ScrapeResponse(**data)

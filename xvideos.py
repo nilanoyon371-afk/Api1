@@ -318,3 +318,44 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
             break
 
     return items
+
+
+async def crawl_videos(
+    base_url: str,
+    start_page: int = 1,
+    max_pages: int = 5,
+    per_page_limit: int = 0,
+    max_items: int = 500,
+) -> list[dict[str, Any]]:
+    if start_page < 1:
+        start_page = 1
+    if max_pages < 1:
+        max_pages = 1
+    if per_page_limit < 0:
+        per_page_limit = 0
+    if max_items < 1:
+        max_items = 1
+
+    results: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    for page in range(start_page, start_page + max_pages):
+        page_items = await list_videos(
+            base_url=base_url,
+            page=page,
+            limit=per_page_limit,
+        )
+
+        if not page_items:
+            break
+
+        for it in page_items:
+            url = str(it.get("url") or "").strip()
+            if not url or url in seen:
+                continue
+            seen.add(url)
+            results.append(it)
+            if len(results) >= max_items:
+                return results
+
+    return results
