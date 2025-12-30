@@ -11,7 +11,10 @@ from playwright.async_api import async_playwright
 
 async def fetch_html(url: str) -> str:
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox"]
+        )
         page = await browser.new_page()
         await page.goto(url)
         content = await page.content()
@@ -146,10 +149,10 @@ def _extract_views(video_obj: Optional[dict[str, Any]], html: str, soup: Beautif
                     return str(v).strip()
 
     for pattern in (
-        r'"userInteractionCount"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?'
-        r'"interactionCount"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?'
-        r'"viewCount"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?'
-        r'"views"\s*:\s*"?([0-9][0-9,\.]*(?:\s*[KMB])?)"?'
+        r'"userInteractionCount"\s*:\s*"([0-9][0-9,\.]*(?:\s*[KMB])?)"'
+        r'"interactionCount"\s*:\s*"([0-9][0-9,\.]*(?:\s*[KMB])?)"'
+        r'"viewCount"\s*:\s*"([0-9][0-9,\.]*(?:\s*[KMB])?)"'
+        r'"views"\s*:\s*"([0-9][0-9,\.]*(?:\s*[KMB])?)"'
     ):
         m = re.search(pattern, html, re.IGNORECASE)
         if m:
@@ -172,7 +175,6 @@ def _extract_views(video_obj: Optional[dict[str, Any]], html: str, soup: Beautif
         return v or None
 
     return None
-
 def parse_page(html: str, url: str) -> dict[str, Any]:
     soup = BeautifulSoup(html, "lxml")
 
@@ -224,7 +226,7 @@ def parse_page(html: str, url: str) -> dict[str, Any]:
     category = None
     tags: list[str] = []
 
-    if video_.pyobj:
+    if video_obj:
         title = _first_non_empty(title, video_obj.get("name"))
         description = _first_non_empty(description, video_obj.get("description"))
 
@@ -448,7 +450,7 @@ async def crawl_videos(
     if start_page < 1:
         start_page = 1
     if max_pages < 1:
-        max_pages = 1
+        max_.pyages = 1
     if per_page_limit < 0:
         per_page_limit = 0
     if max_items < 1:
