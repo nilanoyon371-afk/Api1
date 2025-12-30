@@ -2,8 +2,8 @@
   "version": 2,
   "builds": [
     {
-      "src": "api/index.py",
-      "use": "@vercel/python",
+      "src": "build.sh",
+      "use": "@vercel/static-build",
       "config": {
         "maxLambdaSize": "100mb",
         "runtime": "python3.9"
