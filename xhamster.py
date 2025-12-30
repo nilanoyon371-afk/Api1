@@ -355,7 +355,7 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
         if match:
             try:
                 data = json.loads(match.group(1))
-                videos = data.get("page", {}).get("videoListProps", {}).get("videoThumbProps", [])
+                videos = data.get("layoutPage", {}).get("videoListProps", {}).get("videoThumbProps", [])
                 items = []
                 for video_data in videos:
                     items.append({
@@ -386,7 +386,7 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
             continue
 
         try:
-            abs_.pyurl = str(base_uri.join(href))
+            abs_url = str(base_uri.join(href))
         except Exception:
             continue
 
