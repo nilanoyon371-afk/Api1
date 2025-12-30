@@ -15,15 +15,5 @@
       "src": "/(.*)",
       "dest": "api/index.py"
     }
-  ],
-  "build": {
-    "env": {
-      "PLAYWRIGHT_BROWSERS_PATH": "0"
-    }
-  },
-  "functions": {
-    "api/index.py": {
-      "includeFiles": "xhamster.py"
-    }
-  }
+  ]
 }
