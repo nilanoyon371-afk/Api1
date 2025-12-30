@@ -6,4 +6,7 @@ pip install -r requirements.txt
 
 # 2. Install Playwright browsers
 echo "Installing Playwright browsers..."
-playwright install --with-deps
+playwright install
+
+# 3. Run the application
+python api/index.py
