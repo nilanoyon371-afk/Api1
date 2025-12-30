@@ -7,7 +7,16 @@ from typing import Any, Optional
 
 import httpx
 from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright
 
+async def fetch_html(url: str) -> str:
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        await page.goto(url)
+        content = await page.content()
+        await browser.close()
+        return content
 
 def can_handle(host: str) -> bool:
     return host.lower().endswith("xhamster.com")
@@ -30,31 +39,6 @@ def _find_duration_like_text(node: Any) -> Optional[str]:
         return None
     m = re.search(r"\b(?:\d{1,2}:){1,2}\d{2}\b", text)
     return m.group(0) if m else None
-
-
-async def fetch_html(url: str) -> str:
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Sec-Fetch-User": "?1",
-        "Cookie": "splash-h=1",
-    }
-
-    async with httpx.AsyncClient(
-        follow_redirects=True,
-        timeout=httpx.Timeout(20.0, connect=20.0),
-        headers=headers,
-    ) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
-        return resp.text
 
 
 def _first_non_empty(*values: Optional[str]) -> Optional[str]:
@@ -240,7 +224,7 @@ def parse_page(html: str, url: str) -> dict[str, Any]:
     category = None
     tags: list[str] = []
 
-    if video_obj:
+    if video_.pyobj:
         title = _first_non_empty(title, video_obj.get("name"))
         description = _first_non_empty(description, video_obj.get("description"))
 
