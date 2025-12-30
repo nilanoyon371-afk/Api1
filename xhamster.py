@@ -7,19 +7,18 @@ from typing import Any, Optional
 
 import httpx
 from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright
+
 
 async def fetch_html(url: str) -> str:
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(
-            headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox"]
-        )
-        page = await browser.new_page()
-        await page.goto(url)
-        content = await page.content()
-        await browser.close()
-        return content
+    async with httpx.AsyncClient() as client:
+        # Adding a browser-like user-agent
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        response = await client.get(url, headers=headers, follow_redirects=True, timeout=30.0)
+        response.raise_for_status()
+        return response.text
+
 
 def can_handle(host: str) -> bool:
     return host.lower().endswith("xhamster.com")
@@ -348,7 +347,7 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
                         "url": video_data.get("pageURL"),
                         "title": video_data.get("title"),
                         "thumbnail_url": video_data.get("thumbURL"),
-                        "duration": _normalize_duration(video_data.get("duration")),
+                        "duration": _normalize_duration(_video_data.get("duration")),
                         "views": str(video_data.get("views")) if video_data.get("views") is not None else None,
                         "uploader_name": video_data.get("landing", {}).get("name"),
                         "category": None,
