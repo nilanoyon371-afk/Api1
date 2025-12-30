@@ -7,17 +7,26 @@ from typing import Any, Optional
 
 import httpx
 from bs4 import BeautifulSoup
-
+from playwright.async_api import async_playwright
 
 async def fetch_html(url: str) -> str:
-    async with httpx.AsyncClient() as client:
-        # Adding a browser-like user-agent
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        }
-        response = await client.get(url, headers=headers, follow_redirects=True, timeout=30.0)
-        response.raise_for_status()
-        return response.text
+    # This function is configured to connect to a Kameleo instance.
+    # Make sure you have Kameleo running and the Playwright feature enabled.
+    # The default endpoint is ws://localhost:5050/playwright, which is the default for Kameleo.
+    kameleo_ws_endpoint = "ws://localhost:5050/playwright"
+    async with async_playwright() as p:
+        try:
+            browser = await p.chromium.connect(kameleo_ws_endpoint, timeout=60000)
+            page = await browser.new_page()
+            await page.goto(url, timeout=120000)  # Increased timeout for Kameleo
+            content = await page.content()
+            await browser.close()
+            return content
+        except Exception as e:
+            # Provide a helpful error message if the connection fails
+            raise Exception(f"Could not connect to Kameleo at {kameleo_ws_endpoint}. "
+                            f"Please ensure Kameleo is running and the Playwright integration is active. "
+                            f"Original error: {e}")
 
 
 def can_handle(host: str) -> bool:
@@ -39,7 +48,7 @@ def _find_duration_like_text(node: Any) -> Optional[str]:
         text = node.get_text(" ", strip=True)
     except Exception:
         return None
-    m = re.search(r"\b(?:\d{1,2}:){1,2}\d{2}\b", text)
+    m = re.search(r'\b(?:\d{1,2}:){1,2}\d{2}\b', text)
     return m.group(0) if m else None
 
 
@@ -95,7 +104,7 @@ def _as_list(value: Any) -> list[str]:
     if isinstance(value, list):
         return [str(x).strip() for x in value if str(x).strip()]
     if isinstance(value, str):
-        return [x.strip() for x in re.split(r"[,\n]", value) if x.strip()]
+        return [x.strip() for x in re.split(r'[,\n]', value) if x.strip()]
     return [str(value).strip()] if str(value).strip() else []
 
 
@@ -109,19 +118,19 @@ def _normalize_duration(seconds_or_iso: Any) -> Optional[str]:
         m = (total % 3600) // 60
         s = total % 60
         if h > 0:
-            return f"{h}:{m:02d}:{s:02d}"
-        return f"{m}:{s:02d}"
+            return f'{h}:{m:02d}:{s:02d}'
+        return f'{m}:{s:02d}'
 
     if isinstance(seconds_or_iso, str):
         v = seconds_or_iso.strip()
-        m = re.fullmatch(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?", v)
+        m = re.fullmatch(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?', v)
         if m:
             h = int(m.group(1) or 0)
             mm = int(m.group(2) or 0)
             s = int(m.group(3) or 0)
             if h > 0:
-                return f"{h}:{mm:02d}:{s:02d}"
-            return f"{mm}:{s:02d}"
+                return f'{h}:{mm:02d}:{s:02d}'
+            return f'{mm}:{s:02d}'
         return v or None
 
     return str(seconds_or_iso).strip() or None
@@ -148,26 +157,26 @@ def _extract_views(video_obj: Optional[dict[str, Any]], html: str, soup: Beautif
                     return str(v).strip()
 
     for pattern in (
-        r'"userInteractionCount"\s*:\s*"([0-9][0-9,\.]*(?:\s*[KMB])?)"'
-        r'"interactionCount"\s*:\s*"([0-9][0-9,\.]*(?:\s*[KMB])?)"'
-        r'"viewCount"\s*:\s*"([0-9][0-9,\.]*(?:\s*[KMB])?)"'
+        r'"userInteractionCount"\s*:\s*"([0-9][0-9,\.]*(?:\s*[KMB])?)"',
+        r'"interactionCount"\s*:\s*"([0-9][0-9,\.]*(?:\s*[KMB])?)"',
+        r'"viewCount"\s*:\s*"([0-9][0-9,\.]*(?:\s*[KMB])?)"',
         r'"views"\s*:\s*"([0-9][0-9,\.]*(?:\s*[KMB])?)"'
     ):
         m = re.search(pattern, html, re.IGNORECASE)
         if m:
             v = m.group(1).replace(" ", "").upper()
-            v = re.sub(r"[^0-9KMB\.]", "", v)
+            v = re.sub(r'[^0-9KMB\.]', "", v)
             v = v.rstrip(".")
             return v or None
 
     text = soup.get_text(" ", strip=True)
-    m = re.search(r"(\d+(?:\.\d+)?)\s*([KMB])?\s*(?:views|view)\b", text, re.IGNORECASE)
+    m = re.search(r'(\d+(?:\.\d+)?)\s*([KMB])?\s*(?:views|view)\b', text, re.IGNORECASE)
     if m:
         num = m.group(1)
         suffix = (m.group(2) or "").upper()
-        return f"{num}{suffix}" if suffix else num
+        return f'{num}{suffix}' if suffix else num
 
-    m = re.search(r"([0-9][0-9,\.\s]*)\s*(?:views|view)", text, re.IGNORECASE)
+    m = re.search(r'([0-9][0-9,\.\s]*)\s*(?:views|view)', text, re.IGNORECASE)
     if m:
         v = m.group(1).strip().replace(" ", "")
         v = v.rstrip(",")
@@ -179,7 +188,7 @@ def parse_page(html: str, url: str) -> dict[str, Any]:
 
     initials_script = soup.find("script", id="initials-script")
     if initials_script:
-        match = re.search(r"window\.initials\s*=\s*({.*});", str(initials_script))
+        match = re.search(r'window\.initials\s*=\s*({.*});', str(initials_script))
         if match:
             try:
                 data = json.loads(match.group(1))
@@ -274,7 +283,7 @@ def parse_page(html: str, url: str) -> dict[str, Any]:
     views = _extract_views(video_obj, html, soup)
 
     if not duration:
-        m = re.search(r"\b(\d{1,2}:\d{2}(?::\d{2})?)\b", soup.get_text(" ", strip=True))
+        m = re.search(r'\b(\d{1,2}:\d{2}(?::\d{2})?)\b', soup.get_text(" ", strip=True))
         if m:
             duration = m.group(1)
 
@@ -308,10 +317,10 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
     else:
         candidates.extend(
             [
-                f"{root}?page={page}",
-                f"{root}newest/{page}/",
-                f"{root}newest/{page}",
-                f"{root}videos?page={page}",
+                f'{root}?page={page}',
+                f'{root}newest/{page}/',
+                f'{root}newest/{page}',
+                f'{root}videos?page={page}',
             ]
         )
 
@@ -336,7 +345,7 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
     soup = BeautifulSoup(html, "lxml")
     initials_script = soup.find("script", id="initials-script")
     if initials_script:
-        match = re.search(r"window\.initials\s*=\s*({.*});", str(initials_script))
+        match = re.search(r'window\.initials\s*=\s*({.*});', str(initials_script))
         if match:
             try:
                 data = json.loads(match.group(1))
@@ -347,7 +356,7 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
                         "url": video_data.get("pageURL"),
                         "title": video_data.get("title"),
                         "thumbnail_url": video_data.get("thumbURL"),
-                        "duration": _normalize_duration(_video_data.get("duration")),
+                        "duration": _normalize_duration(video_data.get("duration")),
                         "views": str(video_data.get("views")) if video_data.get("views") is not None else None,
                         "uploader_name": video_data.get("landing", {}).get("name"),
                         "category": None,
@@ -381,7 +390,7 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
         img = a.find("img")
         thumb = _best_image_url(img)
 
-        title_el = a.find(class_=re.compile(r"video-thumb-info__name"))
+        title_el = a.find(class_=re.compile(r'video-thumb-info__name'))
         title = _first_non_empty(
             _text(title_el),
             img.get("alt") if img else None,
@@ -410,11 +419,11 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
             card_text = container.get_text(" ", strip=True)
         except Exception:
             card_text = ""
-        m = re.search(r"(\d+(?:\.\d+)?|\d[\d,\.]*)\s*([KMB])?\s*(?:views|view)\b", card_text, re.IGNORECASE)
+        m = re.search(r'(\d+(?:\.\d+)?|\d[\d,\.]*)\s*([KMB])?\s*(?:views|view)\b', card_text, re.IGNORECASE)
         if m:
             num = m.group(1).replace(" ", "").replace(",", "")
             suf = (m.group(2) or "").upper()
-            views = f"{num}{suf}" if suf else num
+            views = f'{num}{suf}' if suf else num
 
         if not thumb:
             continue
@@ -449,7 +458,7 @@ async def crawl_videos(
     if start_page < 1:
         start_page = 1
     if max_pages < 1:
-        max_.pyages = 1
+        max_pages = 1
     if per_page_limit < 0:
         per_page_limit = 0
     if max_items < 1:
