@@ -309,7 +309,6 @@ async def scrape(url: str) -> dict[str, Any]:
     html = await fetch_html(url)
     return parse_page(html, url)
 
-
 async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dict[str, Any]]:
     root = base_url if base_url.endswith("/") else base_url + "/"
 
@@ -349,40 +348,18 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
         return []
 
     soup = BeautifulSoup(html, "lxml")
-    initials_script = soup.find("script", id="initials-script")
-    if initials_script:
-        match = re.search(r"window\.initials\s*=\s*({.*});", str(initials_script))
-        if match:
-            try:
-                data = json.loads(match.group(1))
-                videos = data.get("page", {}).get("videoListProps", {}).get("videoThumbProps", [])
-                items = []
-                for video_data in videos:
-                    items.append({
-                        "url": video_data.get("pageURL"),
-                        "title": video_data.get("title"),
-                        "thumbnail_url": video_data.get("thumbURL"),
-                        "duration": _normalize_duration(video_data.get("duration")),
-                        "views": str(video_data.get("views")) if video_data.get("views") is not None else None,
-                        "uploader_name": video_data.get("landing", {}).get("name"),
-                        "category": None,
-                        "tags": [],
-                    })
-                return items[:limit] if limit else items
-            except json.JSONDecodeError:
-                pass
-
     base_uri = httpx.URL(used)
 
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    for a in soup.select('a[href*="/videos/"]'):
-        href = a.get("href")
-        if not href:
+    for container in soup.select('.video-thumb-container__info'):
+        name_anchor = container.find('a', class_='video-thumb-info__name')
+        if not name_anchor:
             continue
 
-        if "/videos/" not in href:
+        href = name_anchor.get('href')
+        if not href:
             continue
 
         try:
@@ -393,43 +370,13 @@ async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[dic
         if abs_url in seen:
             continue
 
-        img = a.find("img")
-        thumb = _best_image_url(img)
+        thumb_img = container.find_previous_sibling('a').find('img', class_='video-thumb__image')
+        thumb = _best_image_url(thumb_img)
 
-        title_el = a.find(class_=re.compile(r"video-thumb-info__name"))
-        title = _first_non_empty(
-            _text(title_el),
-            img.get("alt") if img else None,
-            a.get("title"),
-            _text(a),
-        )
-
-        duration = _find_duration_like_text(a)
-
-        container = a
-        for tag in ("article", "li", "div"):
-            p = a.find_parent(tag)
-            if p is not None:
-                container = p
-                break
-
-        uploader_name = None
-        for ua in container.select('a[href*="/users/"], a[href*="/pornstars/"], a[href*="/model/"]'):
-            t = _text(ua)
-            if t:
-                uploader_name = t
-                break
-
-        views = None
-        try:
-            card_text = container.get_text(" ", strip=True)
-        except Exception:
-            card_text = ""
-        m = re.search(r"(\d+(?:\.\d+)?|\d[\d,\.]*)\s*([KMB])?\s*(?:views|view)\b", card_text, re.IGNORECASE)
-        if m:
-            num = m.group(1).replace(" ", "").replace(",", "")
-            suf = (m.group(2) or "").upper()
-            views = f"{num}{suf}" if suf else num
+        title = _text(name_anchor)
+        duration = _text(container.find('div', class_='video-thumb-duration'))
+        views = _text(container.find('div', class_='video-thumb-views'))
+        uploader_name = _text(container.find('a', class_='video-thumb-actor'))
 
         if not thumb:
             continue
