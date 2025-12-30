@@ -122,8 +122,8 @@ async def health() -> dict[str, str]:
 
 @app.get("/scrape", response_model=ScrapeResponse)
 async def scrape(url: str) -> ScrapeResponse:
-    req = ScrapeRequest(url=url)
     try:
+        req = ScrapeRequest(url=url)
         data = await _scrape_dispatch(str(req.url), req.url.host or "")
     except httpx.HTTPStatusError as e:
         raise HTTPException(
@@ -136,15 +136,15 @@ async def scrape(url: str) -> ScrapeResponse:
 
 @app.get("/list", response_model=list[ListItem])
 async def list_videos(base_url: str, page: int = 1, limit: int = 20) -> list[ListItem]:
-    req = ListRequest(base_url=base_url)
-    if page < 1:
-        page = 1
-    if limit < 1:
-        limit = 1
-    if limit > 60:
-        limit = 60
-
     try:
+        req = ListRequest(base_url=base_url)
+        if page < 1:
+            page = 1
+        if limit < 1:
+            limit = 1
+        if limit > 60:
+            limit = 60
+
         items = await _list_dispatch(
             str(req.base_url), req.base_url.host or "", page, limit
         )
